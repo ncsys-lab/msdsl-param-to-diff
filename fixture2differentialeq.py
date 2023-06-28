@@ -70,8 +70,7 @@ def polarparam_to_coeff_dict( circuit_cfg, params_yaml ):
         U_dict = U_side.as_coefficients_dict(s)
         print(Y_dict)
         print(U_dict)
-        print(U_dict[s])
-        
+
         #return for further processing by other means.
         return (Y_dict, U_dict)
 
