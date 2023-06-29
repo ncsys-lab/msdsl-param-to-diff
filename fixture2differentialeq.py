@@ -51,53 +51,81 @@ def polarparam_to_coeff_dict( circuit_cfg, params_yaml ):
         z1 = read_param( 'fz1' )
 
         #Initialize the transfer function, need to manually enter this for the time being.
-        G = ( s - z1 ) / ( ( s - p1 ) * ( s - p2 ) )
+        G = dcgain*( s - z1 ) / ( ( s - p1 ) * ( s - p2 ) )
 
         #Simplify G, just in case
         G = sym.simplify(G)
-
         # G = Y(s)/U(s). Isolate both sides
-        Y_side, U_side = sym.fraction(G)
+        Numer, Denom = sym.fraction(G)
 
         #Expand Factors
-        Y_side = sym.expand_mul(Y_side)
-        U_side = sym.expand_mul(U_side)
-        print(Y_side)
-        print(U_side)
+        Numer = sym.expand_mul(Numer)
+        Denom = sym.expand_mul(Denom)
 
         #create dictionary of coefficients
-        Y_dict = Y_side.as_coefficients_dict(s)
-        U_dict = U_side.as_coefficients_dict(s)
-        print(Y_dict)
-        print(U_dict)
+        Numer_dict = Numer.as_coefficients_dict(s)
+        Denom_dict = Denom.as_coefficients_dict(s)
 
         #return for further processing by other means.
-        return (Y_dict, U_dict)
+        return (Numer_dict, Denom_dict)
 
-#equation_tuple is ( Y_dict, U_dict )
-def laplace_domain_dict_to_diff_dict( equation_tuple ):
-    Y_dict = equation_tuple[0]
-    U_dict = equation_tuple[1]
+def polarparam_to_diff_dict( circuit_cfg, params_yaml, vargen):
+    Numer_dict, Denom_dict= polarparam_to_coeff_dict( circuit_cfg, params_yaml)
+    u = vargen.definevar("u")
+    y = vargen.definevar("y")
 
-    #python doesn't like when you try to change dictionary mid-loop
-    Y_dict_t = {}
-    U_dict_t = {}
+    order = {s:1, 1:0, s**2:2}
+    print("--- transfer function coefficiencts ---")
+    print(" numerator: %s" % str(Numer_dict))
+    print(" denominator: %s" % str(Denom_dict))
+    terms = []
 
-    #output side
-    for term in Y_dict:
-        #replace each key with time-domain equivalent
-        Y_dict_t[laplace_time_dict[term].replace("x","y")] = Y_dict[term]
-    
-    #input side
-    for term in U_dict:
+    for v,coeff in Denom_dict.items():
+        terms.append(coeff*vargen.deriv(y,order[v]))
+    Yexpr = sum(terms)
 
-        U_dict_t[laplace_time_dict[term].replace("x","u")] = U_dict[term]
+    terms = []
+    for v,coeff in Numer_dict.items():
+        terms.append(coeff*vargen.deriv(u,order[v]))
+    Uexpr = sum(terms)
+
+    # Y/U = N/D
+    # Y*D = N*U
+    # 0 = N*U-Y*D
+    print("--- transfer function expressions (U = Y)---")
+    print(" U expr: %s" % Uexpr)
+    print(" Y expr: %s" % Yexpr)
+    Expr = sym.Eq(Uexpr, Yexpr)
+    print("Implicit differential equation: %s" % Expr)
+
+    # difficult to solve implicit differential equations. 
+    # transform into an explicit differential equation.
+    print("----- transform to explicit n-th order ODE ----")
+    lhs = vargen.highest_order("y")
+    print(" [separating out variable %s from %s]" % (lhs, Expr))
+    rhs, = sym.solveset(Expr,lhs)
+    explicit_ode = sym.Eq(lhs, rhs)
+    print(" Explicit Differential Equation: %s" % explicit_ode)
+
+    print("---- transform into first-order ordinary differential equations ----")
+    print("-> replace higher order derivatives with variables")
+    repl_dict = {}
+    for order,var,deriv in vargen.derivatives():
+        newvar = vargen.definevar("d%s_d%d" % (var,order))
+        repl_dict[deriv] = newvar
+
+    print("-> create first-order explicit ODEs")
+    ho_y = vargen.highest_order("y")
+    ho_u = vargen.highest_order("u")
+    vargen.add_ode(y,repl_dict[sym.Derivative(y,t)])
+    vargen.add_ode(u,repl_dict[sym.Derivative(u,t)])
+    for ddt, var in repl_dict.items():
+        deriv_ddt = sym.Derivative(ddt,t)
+        if ddt != ho_y and ddt != ho_u:
+            vargen.add_ode(var,repl_dict[deriv_ddt])
+        elif ddt == ho_y:
+            fo_rhs = rhs.subs(repl_dict)
+            vargen.add_ode(repl_dict[lhs], fo_rhs)
 
 
-    print(( Y_dict_t, U_dict_t ))
-    return ( Y_dict_t, U_dict_t )
-
-
-def polarparam_to_diff_dict( circuit_cfg, params_yaml ):
-    coeff_tuple = polarparam_to_coeff_dict( circuit_cfg, params_yaml)
-    return laplace_domain_dict_to_diff_dict(coeff_tuple)
+    return explicit_ode
