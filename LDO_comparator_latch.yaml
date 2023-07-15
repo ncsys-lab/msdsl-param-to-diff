@@ -1,0 +1,62 @@
+name: LDO_COMPARATOR_LATCH
+filepath: ../spice/LDO_COMPARATOR_LATCH.spice
+template: ComparatorLatchTemplate
+pin:
+    vpwr:
+        direction: input
+        datatype: analog
+        value: 3.3
+    vgnd:
+        direction: input
+        datatype: analog
+        value: 0
+    CLK:
+        direction: input
+        datatype: bit
+    outp:
+        direction: output
+        datatype: real
+    outn:
+        direction: output
+        datatype: real
+    VREF:
+        direction: input
+        datatype: real
+    VREG:
+        direction: input
+        datatype: real
+
+template_pins:
+    inp: VREG
+    inn: VREF
+    clk: CLK 
+    outp: outp
+    outn: outn
+
+extras:
+    approx_settling_time: 10e-7
+    max_slope: 2e3
+    clks:
+        unit: 10e-6
+        period: 10
+        
+        clk:
+            5: 1
+            10: 0
+        out:
+            10: sample
+            4: read
+    #for dynamictest
+    limits_VREG: (0, 3.3)
+    limits_VREF: (1.5, 1.7)
+    debug_plt: 0 #WARNING: IF 1, you will not get meaningful poles/zeros
+    #for SweepTest
+    sweep_values: (0, 3.3)
+    competing_v: 1.6
+    sweep_dt: 1e-6
+
+
+
+test_config_file: ngspice_sky130.yaml
+#test_config_file: ngspice_small_tstep.yaml
+#test_config_file: ngspice.yaml

@@ -38,20 +38,19 @@ def polarparam_to_coeff_dict( circuit_cfg, params_yaml ):
         params  = read_yaml( params_yaml )
 
         #This lambda indexes into the different parameters of the analog block
-        read_param = lambda name: params['test1'][name][0]['coef']['1']
-
-        dcgain = read_param( 'dcgain' )
+        read_param = lambda name: params[name]['const_{}'.format(name)]['const_1']
 
         #Take the poles from the file
         #the msdsl demo uses some sort of timestep-based solver, here I just
         #solve the entire thing using sympy
                 
-        p1 = read_param( 'fp1' )
-        p2 = read_param( 'fp2' )
-        z1 = read_param( 'fz1' )
+        p1 = read_param( 'p1' )
+        p2 = read_param( 'p2' )
+        p3 = read_param( 'p3')
+        z1 = read_param( 'z1' )
 
         #Initialize the transfer function, need to manually enter this for the time being.
-        G = dcgain*( s - z1 ) / ( ( s - p1 ) * ( s - p2 ) )
+        G = ( s - z1 ) / ( ( s - p1 ) * ( s - p2 ) * ( s - p3 ) )
 
         #Simplify G, just in case
         G = sym.simplify(G)
@@ -69,12 +68,12 @@ def polarparam_to_coeff_dict( circuit_cfg, params_yaml ):
         #return for further processing by other means.
         return (Numer_dict, Denom_dict)
 
-def polarparam_to_diff_dict( circuit_cfg, params_yaml, vargen):
+def polarparam_to_diff_dict( circuit_cfg, params_yaml, vargen, default_u_value = 0, default_y_value = 0):
     Numer_dict, Denom_dict= polarparam_to_coeff_dict( circuit_cfg, params_yaml)
-    u = vargen.definevar("u")
-    y = vargen.definevar("y")
+    u = vargen.definevar("u", init_value = default_u_value)
+    y = vargen.definevar("y", init_value = default_y_value)
 
-    order = {s:1, 1:0, s**2:2}
+    order = {s:1, 1:0, s**2:2, s**3:3}
     print("--- transfer function coefficiencts ---")
     print(" numerator: %s" % str(Numer_dict))
     print(" denominator: %s" % str(Denom_dict))
