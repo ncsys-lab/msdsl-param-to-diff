@@ -90,6 +90,7 @@ class GekkoConverter:
         self.vars = {}
         self.conv = {}
 
+
     def getvar(self,name):
         return self.vars[name]
 
@@ -112,6 +113,7 @@ class NumpyODEConverter:
         self.diffeqs = {}
         self.varorder = {}
         self.sim_varorder = []
+        self.internaltime = 0
 
     def ode(self,lhs,rhs):
         varname = lhs.name
@@ -132,11 +134,9 @@ class NumpyODEConverter:
         y_dict = dict(map(lambda v: ( self.sim_varorder[v[0]], v[1] ), enumerate(y)))
         y_dict['du_d5'] = 0
         
-        if(t > 7e-6 / 2):
-            y_dict['u'] = 0
+        self.internaltime = self.internaltime + t
         result_dict = self.compute(y_dict)
-        if(t > 7e-6 / 2):
-            result_dict['u'] = 0
+
         return list(map(lambda v: result_dict[v], self.sim_varorder))
     
     def scipy_init(self, i):
@@ -184,13 +184,15 @@ def main():
                  "dy_d6": 0
 }
 
-    tmax = 7e-6
+    tmax = 1e-8
 
-    t = np.linspace(0,tmax,1000)
-
+    t = np.linspace(0,tmax,10000)
+    time = 0
     def ddt(y,t,diffslv):
         result = diffslv.scipy_ddt(y,t)
-
+        
+        if(diffslv.internaltime > (1e-8/2)):
+            y[diffslv.sim_varorder.index('u')] = 0
         return result
     
     sol = odeint(ddt, ode_converter.scipy_init(init_cond), t, args=(ode_converter,))
@@ -198,8 +200,6 @@ def main():
     for i, var in enumerate(ode_converter.sim_varorder):
         if('dy' in var or 'du' in var):
             continue
-        if(var == 'u'):
-            print(sol[:, i])
         plt.plot(t, sol[:, i], label=var)
     plt.legend(loc='best')
     plt.xlabel('t')
