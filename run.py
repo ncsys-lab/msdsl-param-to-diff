@@ -128,10 +128,15 @@ class NumpyODEConverter:
             result_dict[var] = self.diffeqs[var](*variable_list)
         return result_dict
     
-    def scipy_ddt(self, y):
+    def scipy_ddt(self, y, t):
         y_dict = dict(map(lambda v: ( self.sim_varorder[v[0]], v[1] ), enumerate(y)))
-        y_dict['du_d1'] = 0
+        y_dict['du_d5'] = 0
+        
+        if(t > 7e-6 / 2):
+            y_dict['u'] = 0
         result_dict = self.compute(y_dict)
+        if(t > 7e-6 / 2):
+            result_dict['u'] = 0
         return list(map(lambda v: result_dict[v], self.sim_varorder))
     
     def scipy_init(self, i):
@@ -151,9 +156,9 @@ def main():
     vargen = SympyVarGenerator()
     polarparam_to_diff_dict(
         circuit_cfg=THIS_DIR / 'circuit.cfg',
-        params_yaml=THIS_DIR / 'regression_results.yaml',
+        params_yaml=THIS_DIR / 'regression_results_manypole.yaml',
         vargen = vargen,
-        default_u_value = -1,
+        default_u_value = 1,
         default_y_value = 3.3
     )
 
@@ -165,24 +170,36 @@ def main():
         print(lhs)
         print(rhs)
 
-    init_cond = {"u" : -1,
+    init_cond = {"u" : 1.6,
                  "y" : 3.3,
+                 "du_d1": 0,
+                 "du_d2": 0,
+                 "du_d3": 0,
+                 "du_d4": 0,
                  "dy_d1": 0,
                  "dy_d2": 0,
-                 "dy_d3": 0}
+                 "dy_d3": 0,
+                 "dy_d4": 0,
+                 "dy_d5": 0,
+                 "dy_d6": 0
+}
 
-    tmax = 10e-8
+    tmax = 7e-6
 
     t = np.linspace(0,tmax,1000)
 
     def ddt(y,t,diffslv):
-        return diffslv.scipy_ddt(y)
+        result = diffslv.scipy_ddt(y,t)
+
+        return result
     
     sol = odeint(ddt, ode_converter.scipy_init(init_cond), t, args=(ode_converter,))
-    
+
     for i, var in enumerate(ode_converter.sim_varorder):
-        if('dy' in var):
+        if('dy' in var or 'du' in var):
             continue
+        if(var == 'u'):
+            print(sol[:, i])
         plt.plot(t, sol[:, i], label=var)
     plt.legend(loc='best')
     plt.xlabel('t')

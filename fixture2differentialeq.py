@@ -16,6 +16,7 @@ import numpy as np
 from sympy.integrals import inverse_laplace_transform
 import sympy as sym
 from sympy.abc import s,t,x,y,z
+import cmath
 
 #Laplace and time domain dictionary... add more as needed - can probably chatGPT this
 laplace_time_dict = {
@@ -33,47 +34,67 @@ def read_yaml( f ):
 def polarparam_to_coeff_dict( circuit_cfg, params_yaml ):
         
 
-        # read the two yaml files
-        circuit = read_yaml( circuit_cfg )
-        params  = read_yaml( params_yaml )
+    # read the two yaml files
+    circuit = read_yaml( circuit_cfg )
+    params  = read_yaml( params_yaml )
 
-        #This lambda indexes into the different parameters of the analog block
-        read_param = lambda name: params[name]['const_{}'.format(name)]['const_1']
+    #This lambda indexes into the different parameters of the analog block
+    read_param = lambda name: params[name]['const_{}'.format(name)]['const_1']
+    a = params.items()
 
-        #Take the poles from the file
-        #the msdsl demo uses some sort of timestep-based solver, here I just
-        #solve the entire thing using sympy
-                
-        p1 = read_param( 'p1' )
-        p2 = read_param( 'p2' )
-        p3 = read_param( 'p3')
-        z1 = read_param( 'z1' )
+    paramdict = dict(map(lambda p:(p[0],p[1]['const_{}'.format(p[0])]['const_1']), params.items()))
+    #Take the poles from the file
+    #the msdsl demo uses some sort of timestep-based solver, here I just
+    #solve the entire thing using sympy
+    print(paramdict)
+    params = ['pi', 'pr', 'zi', 'zr']
+    params_separated = {}
+    for pr in params:
+        params_separated[pr] =[]
+        for prv in paramdict.keys():
+            if(pr in prv):
+                params_separated[pr].append(prv)
+    
+    paramdict_comp = {}
+    for p in ['pr','zr']:
+        for i, param in enumerate(params_separated[p]):
+            paramdict_comp[p[0] + str(i)] = complex(paramdict[param], paramdict[param.replace('r','i')])
+    
+    print(paramdict_comp)
+    G = 1 / (s)
 
-        #Initialize the transfer function, need to manually enter this for the time being.
-        G = ( s - z1 ) / ( ( s - p1 ) * ( s - p2 ) * ( s - p3 ) )
+    for param, value in paramdict_comp.items():
+        if 'p' in param:
+            G = G / (s - value)
+        else:
+            G = G * (s - value)
 
-        #Simplify G, just in case
-        G = sym.simplify(G)
-        # G = Y(s)/U(s). Isolate both sides
-        Numer, Denom = sym.fraction(G)
 
-        #Expand Factors
-        Numer = sym.expand_mul(Numer)
-        Denom = sym.expand_mul(Denom)
 
-        #create dictionary of coefficients
-        Numer_dict = Numer.as_coefficients_dict(s)
-        Denom_dict = Denom.as_coefficients_dict(s)
+    #Initialize the transfer function, need to manually enter this for the time being.
 
-        #return for further processing by other means.
-        return (Numer_dict, Denom_dict)
+    #Simplify G, just in case
+    G = sym.simplify(G)
+    # G = Y(s)/U(s). Isolate both sides
+    Numer, Denom = sym.fraction(G)
+
+    #Expand Factors
+    Numer = sym.expand_mul(Numer)
+    Denom = sym.expand_mul(Denom)
+
+    #create dictionary of coefficients
+    Numer_dict = Numer.as_coefficients_dict(s)
+    Denom_dict = Denom.as_coefficients_dict(s)
+
+    #return for further processing by other means.
+    return (Numer_dict, Denom_dict)
 
 def polarparam_to_diff_dict( circuit_cfg, params_yaml, vargen, default_u_value = 0, default_y_value = 0):
     Numer_dict, Denom_dict= polarparam_to_coeff_dict( circuit_cfg, params_yaml)
     u = vargen.definevar("u", init_value = default_u_value)
     y = vargen.definevar("y", init_value = default_y_value)
 
-    order = {s:1, 1:0, s**2:2, s**3:3}
+    order = {s:1, 1:0, s**2:2, s**3:3, s**4:4, s**5:5, s**6:6}
     print("--- transfer function coefficiencts ---")
     print(" numerator: %s" % str(Numer_dict))
     print(" denominator: %s" % str(Denom_dict))
